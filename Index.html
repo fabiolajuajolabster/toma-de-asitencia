@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Reconocimiento Facial</title>
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <style>
+    video, canvas { display: block; margin: 10px auto; }
+    #nombreReconocido { text-align: center; font-size: 1.5em; color: green; }
+  </style>
+</head>
+<body>
+  <h2>Reconocimiento Facial</h2>
+  <video id="video" width="320" height="240" autoplay muted></video>
+  <div id="nombreReconocido"></div>
+  <script>
+    // Cambia esta URL por la de tu Apps Script si lo necesitas
+    const API_URL = 'https://api.allorigins.win/raw?url=https://script.google.com/macros/s/AKfycbwaQ-ON6ffY1SVmEbUSRKH-dmTFFp4pCTDni2Br5rlsFzdmOyZ48ZF5vlNfVRaTPOv1PA/exec';
+
+    function distanciaEuclidea(d1, d2) {
+      return Math.sqrt(d1.reduce((sum, val, i) => sum + Math.pow(val - d2[i], 2), 0));
+    }
+
+    async function cargarDescriptores() {
+      const response = await fetch(API_URL);
+      return await response.json(); // [{nombre, descriptor}, ...]
+    }
+
+    async function startVideo() {
+      const video = document.getElementById('video');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (err) {
+        alert('No se pudo acceder a la cámara');
+      }
+    }
+
+    async function main() {
+      // Carga modelos desde el CDN (no necesitas carpeta models)
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights');
+      await startVideo();
+
+      const video = document.getElementById('video');
+      const nombreDiv = document.getElementById('nombreReconocido');
+      const descriptoresReferencia = await cargarDescriptores();
+      console.log('Descriptores cargados:', descriptoresReferencia);
+
+      video.addEventListener('play', () => {
+        setInterval(async () => {
+          const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+          if (detection) {
+            const descriptorDetectado = Array.from(detection.descriptor);
+            console.log('Descriptor detectado:', descriptorDetectado);
+            let mejorCoincidencia = null;
+            let menorDistancia = Infinity;
+
+            descriptoresReferencia.forEach(ref => {
+              const dist = distanciaEuclidea(descriptorDetectado, ref.descriptor);
+              if (dist < menorDistancia) {
+                menorDistancia = dist;
+                mejorCoincidencia = ref.nombre;
+              }
+            });
+
+            console.log('Menor distancia:', menorDistancia, 'Mejor coincidencia:', mejorCoincidencia);
+
+            if (menorDistancia < 0.5) {
+              nombreDiv.textContent = `¡Reconocido: ${mejorCoincidencia}!`;
+              // Registrar solo una vez cada 10 segundos por persona
+              if (!window.ultimoRegistro || Date.now() - window.ultimoRegistro > 10000) {
+                window.ultimoRegistro = Date.now();
+                await fetch(API_URL, {
+                  method: 'POST',
+                  body: JSON.stringify({ nombre: mejorCoincidencia, similitud: menorDistancia }),
+                  headers: { 'Content-Type': 'application/json' }
+                });
+                console.log(`¡Reconocido: ${mejorCoincidencia} (similitud: ${menorDistancia})!`);
+              }
+            } else {
+              nombreDiv.textContent = 'Desconocido';
+            }
+          } else {
+            nombreDiv.textContent = '';
+          }
+        }, 1500); // cada 1.5 segundos
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', main);
+  </script>
+</body>
+</html>

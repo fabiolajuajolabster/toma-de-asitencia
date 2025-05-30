@@ -6,28 +6,56 @@
   <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
   <style>
     video, canvas { display: block; margin: 10px auto; }
-    #nombreReconocido { text-align: center; font-size: 1.5em; color: green; }
+    #nombreReconocido, #capturaMensaje { text-align: center; font-size: 1.5em; color: green; }
+    .tab-btn { margin: 10px; padding: 10px 20px; font-size: 1em; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
   </style>
 </head>
 <body>
-  <h2>Reconocimiento Facial</h2>
-  <video id="video" width="320" height="240" autoplay muted></video>
-  <div id="nombreReconocido"></div>
+  <h2>Reconocimiento Facial y Captura de Descriptor</h2>
+  <div style="text-align:center;">
+    <button class="tab-btn" onclick="showTab('reconocimiento')">Reconocimiento</button>
+    <button class="tab-btn" onclick="showTab('captura')">Captura Descriptor</button>
+  </div>
+
+  <!-- Reconocimiento -->
+  <div id="reconocimiento" class="tab-content active">
+    <video id="video" width="320" height="240" autoplay muted></video>
+    <div id="nombreReconocido"></div>
+  </div>
+
+  <!-- Captura de Descriptor -->
+  <div id="captura" class="tab-content">
+    <video id="videoCaptura" width="320" height="240" autoplay muted></video>
+    <div style="text-align:center;">
+      <input type="text" id="nombreInput" placeholder="Nombre para guardar">
+      <button onclick="capturarDescriptor()">Capturar y Guardar</button>
+    </div>
+    <div id="capturaMensaje"></div>
+  </div>
+
   <script>
     // Cambia esta URL por la de tu Apps Script si lo necesitas
     const API_URL = 'https://api.allorigins.win/raw?url=https://script.google.com/macros/s/AKfycbwaQ-ON6ffY1SVmEbUSRKH-dmTFFp4pCTDni2Br5rlsFzdmOyZ48ZF5vlNfVRaTPOv1PA/exec';
+
+    function showTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(div => div.classList.remove('active'));
+      document.getElementById(tab).classList.add('active');
+    }
 
     function distanciaEuclidea(d1, d2) {
       return Math.sqrt(d1.reduce((sum, val, i) => sum + Math.pow(val - d2[i], 2), 0));
     }
 
+    // ----------- RECONOCIMIENTO -----------
     async function cargarDescriptores() {
       const response = await fetch(API_URL);
       return await response.json(); // [{nombre, descriptor}, ...]
     }
 
-    async function startVideo() {
-      const video = document.getElementById('video');
+    async function startVideo(videoId) {
+      const video = document.getElementById(videoId);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
@@ -36,11 +64,10 @@
       }
     }
 
-    async function main() {
+    async function mainReconocimiento() {
       const video = document.getElementById('video');
       const nombreDiv = document.getElementById('nombreReconocido');
 
-      // Intenta cargar los modelos y muestra mensaje si falla
       try {
         await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
         await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
@@ -52,7 +79,7 @@
         return;
       }
 
-      await startVideo();
+      await startVideo('video');
 
       const descriptoresReferencia = await cargarDescriptores();
       console.log('Descriptores cargados:', descriptoresReferencia);
@@ -65,7 +92,6 @@
               .withFaceDescriptor();
             if (detection) {
               const descriptorDetectado = Array.from(detection.descriptor);
-              console.log('Descriptor detectado:', descriptorDetectado);
               let mejorCoincidencia = null;
               let menorDistancia = Infinity;
 
@@ -77,9 +103,7 @@
                 }
               });
 
-              console.log('Menor distancia:', menorDistancia, 'Mejor coincidencia:', mejorCoincidencia);
-
-              if (menorDistancia < 0.5) {
+              if (menorDistancia < 0.45) {
                 nombreDiv.textContent = `¡Reconocido: ${mejorCoincidencia}!`;
                 // Registrar solo una vez cada 10 segundos por persona
                 if (!window.ultimoRegistro || Date.now() - window.ultimoRegistro > 10000) {
@@ -105,7 +129,53 @@
       });
     }
 
-    window.addEventListener('DOMContentLoaded', main);
+    // ----------- CAPTURA DE DESCRIPTOR -----------
+    async function mainCaptura() {
+      const video = document.getElementById('videoCaptura');
+      await startVideo('videoCaptura');
+    }
+
+    async function capturarDescriptor() {
+      const video = document.getElementById('videoCaptura');
+      const nombre = document.getElementById('nombreInput').value.trim();
+      const mensajeDiv = document.getElementById('capturaMensaje');
+      mensajeDiv.textContent = '';
+
+      if (!nombre) {
+        mensajeDiv.textContent = 'Por favor ingresa un nombre.';
+        return;
+      }
+
+      try {
+        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+        if (detection) {
+          const descriptor = Array.from(detection.descriptor);
+          // Guardar el descriptor en tu backend
+          await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ nombre, descriptor }),
+            headers: { 'Content-Type': 'application/json' }
+          });
+          mensajeDiv.textContent = `¡Descriptor guardado para ${nombre}!`;
+        } else {
+          mensajeDiv.textContent = 'No se detectó ningún rostro. Intenta de nuevo.';
+        }
+      } catch (err) {
+        console.error('Error al capturar descriptor:', err);
+        mensajeDiv.textContent = 'Error al capturar descriptor.';
+      }
+    }
+
+    // ----------- INICIALIZACIÓN -----------
+    window.addEventListener('DOMContentLoaded', async () => {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+      mainReconocimiento();
+      mainCaptura();
+    });
   </script>
 </body>
 </html>

@@ -37,57 +37,69 @@
     }
 
     async function main() {
-      // Carga modelos desde el CDN (no necesitas carpeta models)
-    // ...existing code...
-    await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-    await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-    await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-    // ...existing code...
-      await startVideo();
-
       const video = document.getElementById('video');
       const nombreDiv = document.getElementById('nombreReconocido');
+
+      // Intenta cargar los modelos y muestra mensaje si falla
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+        await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+        await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+        console.log('Modelos cargados correctamente');
+      } catch (e) {
+        console.error('Error al cargar los modelos:', e);
+        nombreDiv.textContent = 'Error: No se pudieron cargar los modelos de reconocimiento facial.';
+        return;
+      }
+
+      await startVideo();
+
       const descriptoresReferencia = await cargarDescriptores();
       console.log('Descriptores cargados:', descriptoresReferencia);
 
       video.addEventListener('play', () => {
         setInterval(async () => {
-          const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-            .withFaceLandmarks()
-            .withFaceDescriptor();
-          if (detection) {
-            const descriptorDetectado = Array.from(detection.descriptor);
-            console.log('Descriptor detectado:', descriptorDetectado);
-            let mejorCoincidencia = null;
-            let menorDistancia = Infinity;
+          try {
+            const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+              .withFaceLandmarks()
+              .withFaceDescriptor();
+            if (detection) {
+              const descriptorDetectado = Array.from(detection.descriptor);
+              console.log('Descriptor detectado:', descriptorDetectado);
+              let mejorCoincidencia = null;
+              let menorDistancia = Infinity;
 
-            descriptoresReferencia.forEach(ref => {
-              const dist = distanciaEuclidea(descriptorDetectado, ref.descriptor);
-              if (dist < menorDistancia) {
-                menorDistancia = dist;
-                mejorCoincidencia = ref.nombre;
-              }
-            });
+              descriptoresReferencia.forEach(ref => {
+                const dist = distanciaEuclidea(descriptorDetectado, ref.descriptor);
+                if (dist < menorDistancia) {
+                  menorDistancia = dist;
+                  mejorCoincidencia = ref.nombre;
+                }
+              });
 
-            console.log('Menor distancia:', menorDistancia, 'Mejor coincidencia:', mejorCoincidencia);
+              console.log('Menor distancia:', menorDistancia, 'Mejor coincidencia:', mejorCoincidencia);
 
-            if (menorDistancia < 0.5) {
-              nombreDiv.textContent = `¡Reconocido: ${mejorCoincidencia}!`;
-              // Registrar solo una vez cada 10 segundos por persona
-              if (!window.ultimoRegistro || Date.now() - window.ultimoRegistro > 10000) {
-                window.ultimoRegistro = Date.now();
-                await fetch(API_URL, {
-                  method: 'POST',
-                  body: JSON.stringify({ nombre: mejorCoincidencia, similitud: menorDistancia }),
-                  headers: { 'Content-Type': 'application/json' }
-                });
-                console.log(`¡Reconocido: ${mejorCoincidencia} (similitud: ${menorDistancia})!`);
+              if (menorDistancia < 0.5) {
+                nombreDiv.textContent = `¡Reconocido: ${mejorCoincidencia}!`;
+                // Registrar solo una vez cada 10 segundos por persona
+                if (!window.ultimoRegistro || Date.now() - window.ultimoRegistro > 10000) {
+                  window.ultimoRegistro = Date.now();
+                  await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ nombre: mejorCoincidencia, similitud: menorDistancia }),
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                  console.log(`¡Reconocido: ${mejorCoincidencia} (similitud: ${menorDistancia})!`);
+                }
+              } else {
+                nombreDiv.textContent = 'Desconocido';
               }
             } else {
-              nombreDiv.textContent = 'Desconocido';
+              nombreDiv.textContent = 'Esperando rostro...';
             }
-          } else {
-            nombreDiv.textContent = 'Esperando rostro...'; // Cambia aquí
+          } catch (err) {
+            console.error('Error en la detección:', err);
+            nombreDiv.textContent = 'Error en la detección facial.';
           }
         }, 1500); // cada 1.5 segundos
       });

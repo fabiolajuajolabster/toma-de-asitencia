@@ -38,9 +38,11 @@
 
     async function main() {
       // Carga modelos desde el CDN (no necesitas carpeta models)
-await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+    // ...existing code...
+    await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+    await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+    await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+    // ...existing code...
       await startVideo();
 
       const video = document.getElementById('video');
@@ -85,7 +87,7 @@ await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.git
               nombreDiv.textContent = 'Desconocido';
             }
           } else {
-            nombreDiv.textContent = '';
+            nombreDiv.textContent = 'Esperando rostro...'; // Cambia aquí
           }
         }, 1500); // cada 1.5 segundos
       });

@@ -103,7 +103,7 @@
                 }
               });
 
-              if (menorDistancia < 0.45) {
+              if (menorDistancia < 0.6) {
                 nombreDiv.textContent = `¡Reconocido: ${mejorCoincidencia}!`;
                 // Registrar solo una vez cada 10 segundos por persona
                 if (!window.ultimoRegistro || Date.now() - window.ultimoRegistro > 10000) {

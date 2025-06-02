@@ -58,11 +58,15 @@
     <h2>Reconocimiento Facial</h2>
     <video id="video" width="320" height="240" autoplay muted></video>
     <div id="nombreReconocido" class="esperando">Cargando modelos...</div>
+    <div style="margin:20px 0;">
+      <input type="text" id="nombreInput" placeholder="Nombre para guardar rostro" style="padding:6px; width:60%; border-radius:6px; border:1px solid #ccc;">
+      <button id="btnCapturar" style="padding:7px 18px; border-radius:6px; background:#2d3a4b; color:#fff; border:none; font-weight:bold; cursor:pointer;">Capturar Descriptor</button>
+    </div>
     <div class="footer">Powered by face-api.js & Google Apps Script</div>
   </div>
   <script>
     // Cambia esta URL por la de tu Apps Script desplegado como Web App
-    const API_URL = 'https://script.google.com/macros/s/AKfycbw2C77Z1OW8pbjxmkslC4i24gaahAkVNcfKI8McMuZftP2_XPZVS-Sv2uhjfrcYnGM77w/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbzHik03nb_HdBEEHVUkpVIIl2rN-wCvmm1cHGtN78QO_Jb6dpfh4_o_ffWjFhkgRzsQ5Q/exec';
 
     function distanciaEuclidea(d1, d2) {
       return Math.sqrt(d1.reduce((sum, val, i) => sum + Math.pow(val - d2[i], 2), 0));
@@ -87,17 +91,21 @@
       const nombreDiv = document.getElementById('nombreReconocido');
       nombreDiv.textContent = 'Cargando modelos...';
       nombreDiv.className = 'esperando';
+      console.log('Cargando modelos...');
 
       await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
       await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
       await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+      console.log('Modelos cargados correctamente');
       nombreDiv.textContent = 'Iniciando cámara...';
 
       await startVideo();
+      console.log('Cámara iniciada');
 
       const video = document.getElementById('video');
       nombreDiv.textContent = 'Cargando descriptores...';
       const descriptoresReferencia = await cargarDescriptores();
+      console.log('Descriptores cargados:', descriptoresReferencia);
       nombreDiv.textContent = 'Esperando rostro...';
 
       video.addEventListener('play', () => {
@@ -107,6 +115,7 @@
               .withFaceLandmarks()
               .withFaceDescriptor();
             if (detection) {
+              console.log('Rostro detectado');
               const descriptorDetectado = Array.from(detection.descriptor);
               let mejorCoincidencia = null;
               let menorDistancia = Infinity;
@@ -148,6 +157,37 @@
             console.error('Error en la detección:', err);
           }
         }, 1500); // cada 1.5 segundos
+      });
+
+      // Captura de descriptor
+      document.getElementById('btnCapturar').addEventListener('click', async () => {
+        const nombre = document.getElementById('nombreInput').value.trim();
+        if (!nombre) {
+          alert('Por favor ingresa un nombre para guardar el descriptor.');
+          return;
+        }
+        try {
+          console.log('Intentando capturar descriptor para:', nombre);
+          const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+          if (detection) {
+            const descriptor = Array.from(detection.descriptor);
+            await fetch(API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ nombre, descriptor }),
+              headers: { 'Content-Type': 'application/json' }
+            });
+            console.log(`Descriptor guardado para ${nombre}`);
+            alert(`¡Descriptor guardado para ${nombre}!`);
+          } else {
+            console.log('No se detectó ningún rostro para capturar.');
+            alert('No se detectó ningún rostro. Intenta de nuevo.');
+          }
+        } catch (err) {
+          console.error('Error al capturar descriptor:', err);
+          alert('Error al capturar descriptor.');
+        }
       });
     }
 

@@ -3,59 +3,78 @@
 <head>
   <meta charset="UTF-8">
   <title>Reconocimiento Facial</title>
-  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <script defer src="face-api.min.js"></script>
   <style>
-    video, canvas { display: block; margin: 10px auto; }
-    #nombreReconocido, #capturaMensaje { text-align: center; font-size: 1.5em; color: green; }
-    .tab-btn { margin: 10px; padding: 10px 20px; font-size: 1em; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    body {
+      background: #f4f6fb;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 400px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      padding: 32px 24px 24px 24px;
+      text-align: center;
+    }
+    h2 {
+      color: #2d3a4b;
+      margin-bottom: 24px;
+      letter-spacing: 1px;
+    }
+    video {
+      border-radius: 12px;
+      border: 2px solid #e0e6ed;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      margin-bottom: 18px;
+      background: #222;
+    }
+    #nombreReconocido {
+      font-size: 1.3em;
+      font-weight: bold;
+      color: #1a8a34;
+      margin-top: 10px;
+      min-height: 32px;
+      transition: color 0.3s;
+    }
+    #nombreReconocido.desconocido {
+      color: #c0392b;
+    }
+    #nombreReconocido.esperando {
+      color: #888;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 0.95em;
+      color: #888;
+    }
   </style>
 </head>
 <body>
-  <h2>Reconocimiento Facial y Captura de Descriptor</h2>
-  <div style="text-align:center;">
-    <button class="tab-btn" onclick="showTab('reconocimiento')">Reconocimiento</button>
-    <button class="tab-btn" onclick="showTab('captura')">Captura Descriptor</button>
-  </div>
-
-  <!-- Reconocimiento -->
-  <div id="reconocimiento" class="tab-content active">
+  <div class="container">
+    <h2>Reconocimiento Facial</h2>
     <video id="video" width="320" height="240" autoplay muted></video>
-    <div id="nombreReconocido"></div>
+    <div id="nombreReconocido" class="esperando">Cargando modelos...</div>
+    <div class="footer">Powered by face-api.js & Google Apps Script</div>
   </div>
-
-  <!-- Captura de Descriptor -->
-  <div id="captura" class="tab-content">
-    <video id="videoCaptura" width="320" height="240" autoplay muted></video>
-    <div style="text-align:center;">
-      <input type="text" id="nombreInput" placeholder="Nombre para guardar">
-      <button onclick="capturarDescriptor()">Capturar y Guardar</button>
-    </div>
-    <div id="capturaMensaje"></div>
-  </div>
-
   <script>
-    // Cambia esta URL por la de tu Apps Script si lo necesitas
-    const API_URL = 'https://api.allorigins.win/raw?url=https://script.google.com/macros/s/AKfycbwaQ-ON6ffY1SVmEbUSRKH-dmTFFp4pCTDni2Br5rlsFzdmOyZ48ZF5vlNfVRaTPOv1PA/exec';
-
-    function showTab(tab) {
-      document.querySelectorAll('.tab-content').forEach(div => div.classList.remove('active'));
-      document.getElementById(tab).classList.add('active');
-    }
+    // Cambia esta URL por la de tu Apps Script desplegado como Web App
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwypiX_EL303nuwyDGVStEdCD1v8t18fFGYlTRJZpi_/dev';
 
     function distanciaEuclidea(d1, d2) {
       return Math.sqrt(d1.reduce((sum, val, i) => sum + Math.pow(val - d2[i], 2), 0));
     }
 
-    // ----------- RECONOCIMIENTO -----------
     async function cargarDescriptores() {
       const response = await fetch(API_URL);
       return await response.json(); // [{nombre, descriptor}, ...]
     }
 
-    async function startVideo(videoId) {
-      const video = document.getElementById(videoId);
+    async function startVideo() {
+      const video = document.getElementById('video');
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         video.srcObject = stream;
@@ -64,25 +83,22 @@
       }
     }
 
-    async function mainReconocimiento() {
-      const video = document.getElementById('video');
+    async function main() {
       const nombreDiv = document.getElementById('nombreReconocido');
+      nombreDiv.textContent = 'Cargando modelos...';
+      nombreDiv.className = 'esperando';
 
-      try {
-        await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-        await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-        await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-        console.log('Modelos cargados correctamente');
-      } catch (e) {
-        console.error('Error al cargar los modelos:', e);
-        nombreDiv.textContent = 'Error: No se pudieron cargar los modelos de reconocimiento facial.';
-        return;
-      }
+      await faceapi.nets.tinyFaceDetector.loadFromUri('models/');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('models/');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('models/');
+      nombreDiv.textContent = 'Iniciando cámara...';
 
-      await startVideo('video');
+      await startVideo();
 
+      const video = document.getElementById('video');
+      nombreDiv.textContent = 'Cargando descriptores...';
       const descriptoresReferencia = await cargarDescriptores();
-      console.log('Descriptores cargados:', descriptoresReferencia);
+      nombreDiv.textContent = 'Esperando rostro...';
 
       video.addEventListener('play', () => {
         setInterval(async () => {
@@ -103,8 +119,11 @@
                 }
               });
 
-              if (menorDistancia < 0.6) {
+              console.log('Menor distancia:', menorDistancia, 'Mejor coincidencia:', mejorCoincidencia);
+
+              if (menorDistancia < 0.45) {
                 nombreDiv.textContent = `¡Reconocido: ${mejorCoincidencia}!`;
+                nombreDiv.className = '';
                 // Registrar solo una vez cada 10 segundos por persona
                 if (!window.ultimoRegistro || Date.now() - window.ultimoRegistro > 10000) {
                   window.ultimoRegistro = Date.now();
@@ -117,65 +136,22 @@
                 }
               } else {
                 nombreDiv.textContent = 'Desconocido';
+                nombreDiv.className = 'desconocido';
               }
             } else {
               nombreDiv.textContent = 'Esperando rostro...';
+              nombreDiv.className = 'esperando';
             }
           } catch (err) {
-            console.error('Error en la detección:', err);
             nombreDiv.textContent = 'Error en la detección facial.';
+            nombreDiv.className = 'desconocido';
+            console.error('Error en la detección:', err);
           }
         }, 1500); // cada 1.5 segundos
       });
     }
 
-    // ----------- CAPTURA DE DESCRIPTOR -----------
-    async function mainCaptura() {
-      const video = document.getElementById('videoCaptura');
-      await startVideo('videoCaptura');
-    }
-
-    async function capturarDescriptor() {
-      const video = document.getElementById('videoCaptura');
-      const nombre = document.getElementById('nombreInput').value.trim();
-      const mensajeDiv = document.getElementById('capturaMensaje');
-      mensajeDiv.textContent = '';
-
-      if (!nombre) {
-        mensajeDiv.textContent = 'Por favor ingresa un nombre.';
-        return;
-      }
-
-      try {
-        const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks()
-          .withFaceDescriptor();
-        if (detection) {
-          const descriptor = Array.from(detection.descriptor);
-          // Guardar el descriptor en tu backend
-          await fetch(API_URL, {
-            method: 'POST',
-            body: JSON.stringify({ nombre, descriptor }),
-            headers: { 'Content-Type': 'application/json' }
-          });
-          mensajeDiv.textContent = `¡Descriptor guardado para ${nombre}!`;
-        } else {
-          mensajeDiv.textContent = 'No se detectó ningún rostro. Intenta de nuevo.';
-        }
-      } catch (err) {
-        console.error('Error al capturar descriptor:', err);
-        mensajeDiv.textContent = 'Error al capturar descriptor.';
-      }
-    }
-
-    // ----------- INICIALIZACIÓN -----------
-    window.addEventListener('DOMContentLoaded', async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      await faceapi.nets.faceLandmark68Net.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      await faceapi.nets.faceRecognitionNet.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
-      mainReconocimiento();
-      mainCaptura();
-    });
+    window.addEventListener('DOMContentLoaded', main);
   </script>
 </body>
 </html>
